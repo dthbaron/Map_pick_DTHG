@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Wybór Mapy</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .map { margin: 5px; padding: 10px; border: 1px solid #ccc; cursor: pointer; display: inline-block; }
+    .selected { background-color: lightgreen; }
+  </style>
+</head>
+<body>
+  <h1>Wybierz 3 różne mapy:</h1>
+  <div id="maps"></div>
+  <h3>Wybrane mapy:</h3>
+  <ul id="chosenList"></ul>
+
+  <script>
+    const mapy = {
+      "1": "Ancient",
+      "2": "Anubis",
+      "3": "Dust 2",
+      "4": "Inferno",
+      "5": "Mirage",
+      "6": "Nuke",
+      "7": "Train"
+    };
+
+    const selected = [];
+    const mapsDiv = document.getElementById("maps");
+    const chosenList = document.getElementById("chosenList");
+
+    for (const [key, name] of Object.entries(mapy)) {
+      const btn = document.createElement("div");
+      btn.className = "map";
+      btn.textContent = `${key}: ${name}`;
+      btn.onclick = () => {
+        if (selected.includes(key)) {
+          alert("Ta mapa została już wybrana!");
+          return;
+        }
+        if (selected.length >= 3) {
+          alert("Można wybrać tylko 3 mapy.");
+          return;
+        }
+        selected.push(key);
+        btn.classList.add("selected");
+        const li = document.createElement("li");
+        li.textContent = `${key} - ${name}`;
+        chosenList.appendChild(li);
+      };
+      mapsDiv.appendChild(btn);
+    }
+  </script>
+</body>
+</html>
