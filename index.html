@@ -56,7 +56,7 @@
 <body class="flex items-center justify-center min-h-screen">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState } = React;
 
     const MapVotingApp = () => {
       const [nickname, setNickname] = useState('');
@@ -68,12 +68,16 @@
       const [showResults, setShowResults] = useState(false);
 
       const maps = ['Train', 'Dust 2', 'Mirage', 'Nuke', 'Ancient', 'Inferno', 'Overpass'];
-      const allowedNicknames = ['elthi', 'baku', 'b4ku', 'shiver', 'leo', 'kitsu'];
+      // Allow both admin and baku as special users, and b4ku as alias for baku
+      const allowedNicknames = ['elthi', 'baku', 'b4ku', 'admin', 'shiver', 'leo', 'kitsu'];
 
       const normalizeNickname = (nick) => {
         const lowerNick = nick.trim().toLowerCase();
-        return lowerNick === 'b4ku' ? 'baku' : lowerNick;
+        if (lowerNick === 'b4ku') return 'baku';
+        return lowerNick;
       };
+
+      const isAdmin = normalizeNickname(nickname) === 'admin';
 
       const handleLogin = () => {
         if (!nickname.trim()) {
@@ -82,19 +86,24 @@
         }
         const normalizedNick = normalizeNickname(nickname);
         if (!allowedNicknames.includes(normalizedNick)) {
-          setError('Invalid nickname. Use Elthi, Baku/B4ku, Shiver, Leo, or Kitsu.');
+          setError('Invalid nickname. Use Elthi, Baku/B4ku, Admin, Shiver, Leo, or Kitsu.');
           return;
         }
-        if (voters.map(v => normalizeNickname(v)).includes(normalizedNick)) {
+        if (
+          normalizedNick !== 'admin' &&
+          voters.map(v => normalizeNickname(v)).includes(normalizedNick)
+        ) {
           setError('This nickname is already taken.');
           return;
         }
-        if (voters.length >= 5 && normalizedNick !== 'baku') {
+        if (voters.length >= 5 && normalizedNick !== 'admin') {
           setError('Maximum 5 voters allowed.');
           return;
         }
         setError('');
-        setVoters([...voters, nickname.trim()]);
+        if (normalizedNick !== 'admin') {
+          setVoters([...voters, nickname.trim()]);
+        }
         setIsLoggedIn(true);
       };
 
@@ -118,7 +127,7 @@
         setIsLoggedIn(false);
         setNickname('');
         setSelectedMaps([]);
-        if (voters.length === 5) {
+        if (Object.keys(votes).length + 1 >= 5) {
           setShowResults(true);
         }
       };
@@ -134,11 +143,11 @@
       };
 
       const renderResults = () => {
-        if (normalizeNickname(nickname) !== 'baku') {
-          return <p class="error-text text-sm">Only Baku can view the results.</p>;
+        if (!isAdmin) {
+          return <p class="error-text text-sm">Only Admin can view the results.</p>;
         }
-        if (!showResults) {
-          return <p class="waiting-text text-sm">Waiting for all 5 players to vote...</p>;
+        if (Object.keys(votes).length === 0) {
+          return <p class="waiting-text text-sm">No votes yet.</p>;
         }
         // Summarization: sort maps by votes descending
         const counts = calculateVoteCounts();
@@ -157,14 +166,17 @@
                 ))}
               </ul>
             </div>
-            {Object.keys(votes).map(voter => (
-              <div key={voter} class="mb-2">
-                <p class="font-semibold text-sm result-text">{voter}:</p>
-                <ul class="list-disc pl-5 text-sm result-text">
-                  {votes[voter].map(map => <li key={map}>{map}</li>)}
-                </ul>
-              </div>
-            ))}
+            <div class="mb-4">
+              <h3 class="text-sm font-semibold result-text mb-2">Who voted for what:</h3>
+              {Object.keys(votes).map(voter => (
+                <div key={voter} class="mb-2">
+                  <p class="font-semibold text-sm result-text">{voter}:</p>
+                  <ul class="list-disc pl-5 text-sm result-text">
+                    {votes[voter].map(map => <li key={map}>{map}</li>)}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
         );
       };
@@ -174,7 +186,7 @@
           {!isLoggedIn ? (
             <div>
               <h1 class="text-2xl font-bold mb-3 text-center result-text">CS2 Map Voting</h1>
-              <p class="text-sm mb-3 result-text">Enter your nickname (Elthi, Baku/B4ku, Shiver, Leo, or Kitsu) to vote for 3 maps.</p>
+              <p class="text-sm mb-3 result-text">Enter your nickname (Elthi, Baku/B4ku, Admin, Shiver, Leo, or Kitsu) to vote for 3 maps.</p>
               <input
                 type="text"
                 value={nickname}
@@ -187,45 +199,36 @@
                 onClick={handleLogin}
                 class="w-full action-button p-3 rounded text-sm"
               >
-                Start Voting
+                {isAdmin ? 'View Results' : 'Start Voting'}
               </button>
-              {normalizeNickname(nickname) === 'baku' && (
-                <div class="mt-3">
-                  <button
-                    onClick={() => setIsLoggedIn(true)}
-                    class="w-full action-button p-3 rounded text-sm"
-                  >
-                    View Results
-                  </button>
-                </div>
-              )}
             </div>
           ) : (
-            <div>
-              <h2 class="text-xl font-bold mb-3 result-text">Hello, {nickname}!</h2>
-              <p class="text-sm mb-3 result-text">Select exactly 3 maps to vote for:</p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                {maps.map(map => (
-                  <button
-                    key={map}
-                    onClick={() => handleMapSelection(map)}
-                    class={`p-3 rounded text-sm ${selectedMaps.includes(map) ? 'map-button-selected' : 'map-button'}`}
-                  >
-                    {map}
-                  </button>
-                ))}
+            isAdmin ? (
+              <div class="mt-3">{renderResults()}</div>
+            ) : (
+              <div>
+                <h2 class="text-xl font-bold mb-3 result-text">Hello, {nickname}!</h2>
+                <p class="text-sm mb-3 result-text">Select exactly 3 maps to vote for:</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                  {maps.map(map => (
+                    <button
+                      key={map}
+                      onClick={() => handleMapSelection(map)}
+                      class={`p-3 rounded text-sm ${selectedMaps.includes(map) ? 'map-button-selected' : 'map-button'}`}
+                    >
+                      {map}
+                    </button>
+                  ))}
+                </div>
+                {error && <p class="error-text text-sm mb-3">{error}</p>}
+                <button
+                  onClick={handleVoteSubmit}
+                  class="w-full action-button p-3 rounded text-sm"
+                >
+                  Submit Votes
+                </button>
               </div>
-              {error && <p class="error-text text-sm mb-3">{error}</p>}
-              <button
-                onClick={handleVoteSubmit}
-                class="w-full action-button p-3 rounded text-sm"
-              >
-                Submit Votes
-              </button>
-            </div>
-          )}
-          {isLoggedIn && normalizeNickname(nickname) === 'baku' && (
-            <div class="mt-3">{renderResults()}</div>
+            )
           )}
         </div>
       );
