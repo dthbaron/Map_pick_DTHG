@@ -1,56 +1,255 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Wybór Mapy</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS2 Map Voting</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    .map { margin: 5px; padding: 10px; border: 1px solid #ccc; cursor: pointer; display: inline-block; }
-    .selected { background-color: lightgreen; }
+    body {
+      background: #000000;
+      color: #cce6ff;
+    }
+    .container {
+      background: #001a33;
+      box-shadow: 0 0 10px rgba(51,153,255,0.3);
+    }
+    .map-button {
+      background: #001a33;
+      color: #3399ff;
+      border: 1px solid #3399ff;
+    }
+    .map-button-selected {
+      background: #3399ff;
+      color: #000000;
+      border: 1px solid #3399ff;
+    }
+    .map-button:hover {
+      background: #3399ff;
+      color: #000000;
+    }
+    .action-button {
+      background: #3399ff;
+      color: #000000;
+    }
+    .action-button:hover {
+      background: #2a7acc;
+    }
+    .error-text {
+      color: #3399ff;
+    }
+    .waiting-text {
+      color: #999999;
+    }
+    .result-text {
+      color: #cce6ff;
+    }
+    canvas {
+      max-width: 100%;
+      width: 100%;
+    }
   </style>
 </head>
-<body>
-  <h1>Wybierz 3 różne mapy:</h1>
-  <div id="maps"></div>
-  <h3>Wybrane mapy:</h3>
-  <ul id="chosenList"></ul>
+<body class="flex items-center justify-center min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
-  <script>
-    const mapy = {
-      "1": "Ancient",
-      "2": "Anubis",
-      "3": "Dust 2",
-      "4": "Inferno",
-      "5": "Mirage",
-      "6": "Nuke",
-      "7": "Train"
+    const MapVotingApp = () => {
+      const [nickname, setNickname] = useState('');
+      const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [selectedMaps, setSelectedMaps] = useState([]);
+      const [error, setError] = useState('');
+      const [votes, setVotes] = useState({});
+      const [voters, setVoters] = useState([]);
+      const [showResults, setShowResults] = useState(false);
+      const canvasRef = useRef(null);
+
+      const maps = ['Train', 'Dust 2', 'Mirage', 'Nuke', 'Ancient', 'Inferno', 'Overpass'];
+      const allowedNicknames = ['elthi', 'baku', 'b4ku', 'shiver', 'leo', 'kitsu'];
+
+      const normalizeNickname = (nick) => {
+        const lowerNick = nick.trim().toLowerCase();
+        return lowerNick === 'b4 B4ku' ? 'baku' : lowerNick;
+      };
+
+      const handleLogin = () => {
+        if (!nickname.trim()) {
+          setError('Please enter a nickname.');
+          return;
+        }
+        const normalizedNick = normalizeNickname(nickname);
+        if (!allowedNicknames.includes(normalizedNick)) {
+          setError('Invalid nickname. Use Elthi, Baku/B4ku, Shiver, Leo, or Kitsu.');
+          return;
+        }
+        if (voters.map(v => normalizeNickname(v)).includes(normalizedNick)) {
+          setError('This nickname is already taken.');
+          return;
+        }
+        if (voters.length >= 5 && normalizedNick !== 'baku') {
+          setError('Maximum 5 voters allowed.');
+          return;
+        }
+        setError('');
+        setVoters([...voters, nickname.trim()]);
+        setIsLoggedIn(true);
+      };
+
+      const handleMapSelection = (map) => {
+        if (selectedMaps.includes(map)) {
+          setSelectedMaps(selectedMaps.filter(m => m !== map));
+        } else if (selectedMaps.length < 3) {
+          setSelectedMaps([...selectedMaps, map]);
+        } else {
+          setError('You can only select 3 maps.');
+        }
+      };
+
+      const handleVoteSubmit = () => {
+        if (selectedMaps.length !== 3) {
+          setError('Please select exactly 3 maps.');
+          return;
+        }
+        setVotes({ ...votes, [nickname]: selectedMaps });
+        setError('');
+        setIsLoggedIn(false);
+        setNickname('');
+        setSelectedMaps([]);
+        if (voters.length === 5) {
+          setShowResults(true);
+        }
+      };
+
+      const calculateVoteCounts = () => {
+        const counts = maps.reduce((acc, map) => ({ ...acc, [map]: 0 }), {});
+        Object.values(votes).forEach(voterMaps => {
+          voterMaps.forEach(map => {
+            counts[map]++;
+          });
+        });
+        return counts;
+      };
+
+      useEffect(() => {
+        if (showResults && normalizeNickname(nickname) === 'baku' && canvasRef.current) {
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          const counts = calculateVoteCounts();
+          const barHeight = 30;
+          const gap = 10;
+          canvas.height = maps.length * (barHeight + gap) + gap;
+          canvas.width = 300; // Adjust for mobile
+
+          ctx.fillStyle = '#001a33';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          const maxVotes = Math.max(...Object.values(counts), 1);
+          maps.forEach((map, index) => {
+            const votes = counts[map];
+            const barWidth = (votes / maxVotes) * (canvas.width - 100);
+            ctx.fillStyle = '#3399ff';
+            ctx.fillRect(80, index * (barHeight + gap) + gap, barWidth, barHeight);
+            ctx.fillStyle = '#cce6ff';
+            ctx.font = '12px Arial';
+            ctx.fillText(map, 5, index * (barHeight + gap) + gap + 20);
+            ctx.fillText(votes, barWidth + 85, index * (barHeight + gap) + gap + 20);
+          });
+        }
+      }, [showResults, votes, nickname]);
+
+      const renderResults = () => {
+        if (normalizeNickname(nickname) !== 'baku') {
+          return <p class="error-text text-sm">Only Baku can view the results.</p>;
+        }
+        if (!showResults) {
+          return <p class="waiting-text text-sm">Waiting for all 5 players to vote...</p>;
+        }
+        return (
+          <div>
+            <h2 class="text-xl font-bold mb-3 result-text">Voting Results</h2>
+            <div class="mb-4">
+              <h3 class="text-sm font-semibold result-text mb-2">Vote Counts</h3>
+              <canvas ref={canvasRef} class="max-w-full w-full"></canvas>
+            </div>
+            {Object.keys(votes).map(voter => (
+              <div key={voter} class="mb-2">
+                <p class="font-semibold text-sm result-text">{voter}:</p>
+                <ul class="list-disc pl-5 text-sm result-text">
+                  {votes[voter].map(map => <li key={map}>{map}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        );
+      };
+
+      return (
+        <div class="max-w-sm mx-auto container p-4 rounded-lg">
+          {!isLoggedIn ? (
+            <div>
+              <h1 class="text-2xl font-bold mb-3 text-center result-text">CS2 Map Voting</h1>
+              <p class="text-sm mb-3 result-text">Enter your nickname (Elthi, Baku/B4ku, Shiver, Leo, or Kitsu) to vote for 3 maps.</p>
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="Enter your nickname"
+                class="w-full p-2 mb-3 border border-[#3399ff] rounded text-sm focus:outline-none bg-[#001a33] result-text"
+              />
+              {error && <p class="error-text text-sm mb-3">{error}</p>}
+              <button
+                onClick={handleLogin}
+                class="w-full action-button p-3 rounded text-sm"
+              >
+                Start Voting
+              </button>
+              {normalizeNickname(nickname) === 'baku' && (
+                <div class="mt-3">
+                  <button
+                    onClick={() => setIsLoggedIn(true)}
+                    class="w-full action-button p-3 rounded text-sm"
+                  >
+                    View Results
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <h2 class="text-xl font-bold mb-3 result-text">Hello, {nickname}!</h2>
+              <p class="text-sm mb-3 result-text">Select exactly 3 maps to vote for:</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                {maps.map(map => (
+                  <button
+                    key={map}
+                    onClick={() => handleMapSelection(map)}
+                    class={`p-3 rounded text-sm ${selectedMaps.includes(map) ? 'map-button-selected' : 'map-button'}`}
+                  >
+                    {map}
+                  </button>
+                ))}
+              </div>
+              {error && <p class="error-text text-sm mb-3">{error}</p>}
+              <button
+                onClick={handleVoteSubmit}
+                class="w-full action-button p-3 rounded text-sm"
+              >
+                Submit Votes
+              </button>
+            </div>
+          )}
+          {isLoggedIn && normalizeNickname(nickname) === 'baku' && (
+            <div class="mt-3">{renderResults()}</div>
+          )}
+        </div>
+      );
     };
 
-    const selected = [];
-    const mapsDiv = document.getElementById("maps");
-    const chosenList = document.getElementById("chosenList");
-
-    for (const [key, name] of Object.entries(mapy)) {
-      const btn = document.createElement("div");
-      btn.className = "map";
-      btn.textContent = `${key}: ${name}`;
-      btn.onclick = () => {
-        if (selected.includes(key)) {
-          alert("Ta mapa została już wybrana!");
-          return;
-        }
-        if (selected.length >= 3) {
-          alert("Można wybrać tylko 3 mapy.");
-          return;
-        }
-        selected.push(key);
-        btn.classList.add("selected");
-        const li = document.createElement("li");
-        li.textContent = `${key} - ${name}`;
-        chosenList.appendChild(li);
-      };
-      mapsDiv.appendChild(btn);
-    }
+    ReactDOM.render(<MapVotingApp />, document.getElementById('root'));
   </script>
 </body>
 </html>
